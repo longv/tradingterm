@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+
+  spark-master:
+    container_name: spark-master
+    build:
+      context: ./analyzer/
+      target: pyspark
+    image: spark-image
+    entrypoint: ['./analyzer/entrypoint.sh', 'master']
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - ./data:/opt/spark/data
+      - ./spark_apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+      - ./notebooks:/opt/notebooks
+    env_file:
+      - .env.spark
+    ports:
+      - '4040:4040'
+      - '9090:8080'
+      - '7077:7077'
+
+  spark-worker:
+    image: spark-image
+    container_name: spark-worker
+    entrypoint: ['./analyzer/entrypoint.sh', 'worker']
+    depends_on:
+      - spark-master
+    env_file:
+      - .env.spark
+    volumes:
+      - ./data:/opt/spark/data
+      - ./spark_apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+      - ./notebooks:/opt/notebooks
+    ports:
+      - '8081:8081'
+
+  spark-history-server:
+    container_name: spark-history
+    image: spark-image
+    entrypoint: ['./analyzer/entrypoint.sh', 'history']
+    depends_on:
+      - spark-master
+    env_file:
+      - .env.spark
+    volumes:
+      - spark-logs:/opt/spark/spark-events
+    ports:
+      - '18080:18080'
+
+volumes:
+  spark-logs:

@@ -1,0 +1,8 @@
+resources:
+  - spark-master.yaml
+  - spark-worker.yaml
+
+configMapGenerator:
+  - name: spark-apps
+    # files:
+    #   - ../spark-apps/example.py
