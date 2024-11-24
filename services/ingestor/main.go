@@ -17,7 +17,7 @@ const (
 	dataDir      = "./data"
 	projectID    = "trading-term"
 	instanceID   = "dev-bigtable-instance"
-	tableName    = "your-table-name"
+	tableName    = "trading-data-table"
 	columnFamily = "attributes"
 )
 
@@ -67,12 +67,6 @@ func processAndSaveToBigtable(
 	}
 	defer csvFile.Close()
 
-	// reader := csv.NewReader(csvFile)
-	// records, err := reader.ReadAll()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to read CSV file: %w", err)
-	// }
-
 	reader := csv.NewReader(csvFile)
 	reader.FieldsPerRecord = -1
 
@@ -94,8 +88,6 @@ func processAndSaveToBigtable(
 
 	columnIndices := make(map[string]int)
 	for i, record := range records {
-		// log.Printf("Record %s: %v", filePath, record[0])
-
 		// Store header as column indices for easier access
 		if i == 0 {
 			for j, columnName := range record {
@@ -105,29 +97,33 @@ func processAndSaveToBigtable(
 			continue
 		}
 
+		if record[columnIndices["Trading date"]] == "" ||
+			record[columnIndices["Trading time"]] == "" ||
+			record[columnIndices["Last"]] == "" {
+			continue
+		}
+
 		symbolID := record[columnIndices["ID"]]
 		secType := record[columnIndices["SecType"]]
-		tradingDate := record[columnIndices["Trading date"]]
-		rowKey := fmt.Sprintf("%s#%s#%s", secType, symbolID, tradingDate)
-		// rowKey := strings.TrimSpace(record[0])
-		// if rowKey == "" {
-		// 	log.Printf("Skipping row with empty row key in file %s: %v", filePath, record)
-		// 	continue
-		// }
-		//
-		// // Create a mutation for the row
-		// mut := bigtable.NewMutation()
-		//
-		// // Add the rest of the columns to the mutation
-		// for i, value := range record[1:] {
-		// 	column := fmt.Sprintf("column%d", i+1) // Create column names like "column1", "column2", etc.
-		// 	mut.Set(columnFamily, column, bigtable.Now(), []byte(value))
-		// }
-		//
-		// // Apply the mutation
-		// if err := table.Apply(ctx, rowKey, mut); err != nil {
-		// 	log.Printf("Failed to write row %s: %v", rowKey, err)
-		// }
+
+		tradingTimestamp, err := convertToTimestamp(
+			record[columnIndices["Trading date"]],
+			record[columnIndices["Trading time"]],
+		)
+		if err != nil {
+			return fmt.Errorf("failed to convert timestamp: %w", err)
+		}
+
+		rowKey := fmt.Sprintf("%s#%s#%s", secType, symbolID, tradingTimestamp)
+
+		// Create a mutation for the row
+		mut := bigtable.NewMutation()
+		mut.Set(columnFamily, "last-price", bigtable.Now(), []byte(record[columnIndices["Last"]]))
+
+		// Apply the mutation
+		if err := table.Apply(ctx, rowKey, mut); err != nil {
+			return fmt.Errorf("failed to write row %s: %w", rowKey, err)
+		}
 	}
 
 	log.Printf("Processed and saved file: %s", filePath)
@@ -136,8 +132,8 @@ func processAndSaveToBigtable(
 }
 
 func convertToTimestamp(dateStr, timeStr string) (int64, error) {
-	dateLayout := "02-01-2006"    // For "dd-mm-YYYY"
-	timeLayout := "15:04:05.0000" // For "HH:MM:SS.ssss"
+	dateLayout := "02-01-2006"   // For "dd-mm-YYYY"
+	timeLayout := "15:04:05.000" // For "HH:MM:SS.sss"
 
 	location, err := time.LoadLocation("Europe/Berlin") // CEST timezone
 	if err != nil {

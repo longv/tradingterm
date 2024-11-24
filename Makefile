@@ -11,7 +11,8 @@ apply:
 	@echo "Create k8s cluster..."
 	kind create cluster --name $(CLUSTER_NAME) --config ./k8s/kind-config.yaml
 	@echo "Applying all resources to the cluster..."
-	kubectl apply -k $(APP_SPARK)/k8s
+	helm install spark-operator spark-operator/spark-operator --namespace spark-operator --create-namespace --wait
+	kubectl apply -k $(APP_SPARK)
 
 delete:
 	@echo "Deleting k8s cluster..."

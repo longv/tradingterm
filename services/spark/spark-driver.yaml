@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: spark-driver
+spec:
+  containers:
+    - name: spark-driver
+      image: docker.io/bitnami/spark:latest
+      env:
+        - name: HOME
+          value: "/root"  # Set to the home directory of the container user
+        - name: SPARK_HOME
+          value: "/opt/bitnami/spark"  # Set to your Spark installation directory
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/opt/secrets/gcs-key.json"
+      command: ["/opt/bitnami/spark/bin/spark-submit"]  # Use Bitnami Spark's spark-submit path
+      args:
+        - --master
+        - spark://spark-master:7077  # Use the Bitnami Spark master URL
+        - --deploy-mode
+        - client
+        - --name
+        - python-spark-job
+        - --jars
+        - https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop3-latest.jar
+        - --conf
+        - spark.executor.instances=2
+        - --conf
+        - spark.executor.memory=1g
+        - --conf
+        - spark.executor.cores=1
+        - --conf
+        - spark.jars.ivy=/tmp/.ivy2
+        - --conf 
+        - spark.hadoop.security.authentication=simple
+        - --conf
+        - spark.hadoop.fs.gs.impl=com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
+        - --conf
+        - spark.hadoop.fs.gs.project.id=trading-term
+        - --conf
+        - spark.hadoop.google.cloud.auth.service.account.enable=true
+        - --conf
+        - spark.hadoop.google.cloud.auth.service.account.json.keyfile=/opt/secrets/gcs-key.json
+        - --conf 
+        - spark.kubernetes.driverEnv.GOOGLE_APPLICATION_CREDENTIALS=/opt/secrets/gcs-key.json
+        - --conf 
+        - spark.kubernetes.executorEnv.GOOGLE_APPLICATION_CREDENTIALS=/opt/secrets/gcs-key.json
+        - local:///opt/spark-apps/analyzer.py  # Path to your Python script inside the container
+      volumeMounts:
+        - name: spark-apps
+          mountPath: /opt/spark-apps
+        - name: gcs-key
+          mountPath: /opt/secrets
+          readOnly: true
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "1"
+        limits:
+          memory: "1Gi"
+          cpu: "2"
+  volumes:
+    - name: spark-apps
+      configMap:
+        name: spark-apps
+    - name: gcs-key
+      secret:
+        secretName: gcs-key
+  restartPolicy: Never

@@ -1,0 +1,97 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: pyspark-job
+  namespace: default
+spec:
+  type: Python
+  mode: cluster
+  image: spark:3.5.3 
+  imagePullPolicy: Always
+  sparkConf:
+    "spark.jars.ivy": "/tmp/ivy"
+    "spark.hadoop.fs.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+    "spark.hadoop.fs.AbstractFileSystem.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+    # "spark.hadoop.fs.AbstractFileSystem.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS"
+    "spark.hadoop.fs.gs.project.id" : "trading-term"
+    "spark.hadoop.google.cloud.auth.service.account.enable": "true"
+    "spark.hadoop.google.cloud.auth.service.account.json.keyfile": "/mnt/secrets/gcs-key.json"
+    # "spark.hadoop.fs.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+  # sparkConfigMap: spark-conf
+  # hadoopConf:
+  #   "fs.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+  #   "fs.AbstractFileSystem.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+    # "fs.gs.project.id": "trading-term"
+    # "fs.gs.system.bucket": "cs-e4780"
+    # "spark.hadoop.fs.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+    # "google.cloud.auth.service.account.enable": "true"
+    # "google.cloud.auth.service.account.json.keyfile": "/mnt/secrets/gcs-key.json"
+  # hadoopConfigMap: hadoop-conf
+  # image: bitnami/spark:latest
+  # imagePullPolicy: IfNotPresent
+  mainApplicationFile: "local:///mnt/spark-apps/analyzer.py"
+  sparkVersion: "3.5.3"
+  restartPolicy:
+    type: Never
+  deps:
+    jars:
+      - https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop3-latest.jar
+    # repositories:
+    #   - https://mvnrepository.com/artifact/com.google.cloud.bigdataoss/gcs-connector
+    # packages:
+    #   - com.google.cloud.bigdataoss:gcs-connector:3.0.4
+    # jars: 
+    #   - local:///mnt/spark-libs/gcs-connector-hadoop3-latest.jar
+  driver:
+    cores: 1
+    memory: "512m"
+    serviceAccount: spark-operator-spark
+    secrets:
+      - name: gcs-key
+        path: /mnt/secrets
+        secretType: GCPServiceAccount
+    envVars:
+      GCS_PROJECT_ID: trading-term
+    configMaps:
+      # - name: spark-libs
+      #   path: /mnt/spark-libs
+      - name: spark-apps
+        path: /mnt/spark-apps
+    # env:
+    #   - name: GOOGLE_APPLICATION_CREDENTIALS
+    #     value: /opt/spark/secrets/gcs-key.json
+    # volumeMounts:
+    #   - name: spark-apps
+    #     mountPath: /opt/spark-apps
+    #   - name: gcs-key
+    #     mountPath: /mnt/secrets/gcp
+  executor:
+    cores: 1
+    instances: 2
+    memory: "512m"
+    secrets:
+      - name: gcs-key
+        path: /mnt/secrets
+        secretType: GCPServiceAccount
+    envVars:
+      GCS_PROJECT_ID: trading-term
+    configMaps:
+      # - name: spark-libs
+      #   path: /mnt/spark-libs
+      - name: spark-apps
+        path: /mnt/spark-apps
+    # env:
+    #   - name: GOOGLE_APPLICATION_CREDENTIALS
+    #     value: /opt/spark/secrets/gcs-key.json
+  #   volumeMounts:
+  #     - name: spark-apps
+  #       mountPath: /opt/spark-apps
+  #     - name: gcs-key
+  #       mountPath: /mnt/secrets/gcp
+  # volumes:
+  #   - name: spark-apps
+  #     configMap:
+  #       name: spark-apps
+  #   - name: gcs-key
+  #     secret:
+  #       secretName: gcs-key

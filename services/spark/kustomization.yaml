@@ -1,0 +1,33 @@
+configMapGenerator:
+  # - name: spark-libs
+  #   files:
+  #     - ./libs/gcs-connector-hadoop3-latest.jar
+  #   options:
+  #     disableNameSuffixHash: true
+  - name: spark-conf
+    files:
+      - ./conf/spark-env.sh
+    options:
+      disableNameSuffixHash: true
+  - name: hadoop-conf
+    files:
+      - ./conf/core-site.xml
+    options:
+      disableNameSuffixHash: true
+  - name: spark-apps
+    files:
+      - ./spark-apps/analyzer.py
+    options:
+      disableNameSuffixHash: true
+  # - name: spark-data
+  #   files:
+  #     - ./data/debs2022-gc-trading-day-08-11-21.csv
+  #   options:
+  #     disableNameSuffixHash: true
+
+secretGenerator:
+  - name: gcs-key
+    files:
+      - ./secrets/gcs-key.json  # GCS service account key
+    options:
+      disableNameSuffixHash: true  # Keep the Secret name static

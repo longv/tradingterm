@@ -25,6 +25,16 @@ spec:
               value: "worker"
             - name: SPARK_MASTER_URL
               value: "spark://spark-master:7077"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/opt/secrets/gcs-key.json"
           ports:
             - containerPort: 7077  # Connect to Spark master
             - containerPort: 8081
+          volumeMounts:
+            - name: gcs-key 
+              mountPath: /opt/secrets
+              readOnly: true
+      volumes:
+        - name: gcs-key
+          secret:
+            secretName: gcs-key
