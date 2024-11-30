@@ -1,4 +1,7 @@
 import logging
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import ArrayType, DoubleType
@@ -139,6 +142,21 @@ def main():
     df = calculateEma(df)
 
     df.show()
+
+    pdf = df.toPandas()
+
+    # Convert the timestamp column to a datetime object for better handling
+    pdf['timestamp'] = pd.to_datetime(pdf['timestamp'])
+
+    # Plot EMA over Time
+    plt.figure(figsize=(12, 6))
+    sns.lineplot(data=pdf, x="timestamp", y="ema", hue="id")
+    plt.title("EMA Over Time")
+    plt.xlabel("Timestamp")
+    plt.ylabel("EMA")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
 
     # Stop SparkSession
     spark.stop()
