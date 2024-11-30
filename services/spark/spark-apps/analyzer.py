@@ -1,6 +1,8 @@
 import logging
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql import functions as F
+from pyspark.sql.types import ArrayType, DoubleType
+from pyspark.sql.window import Window
 # from org.apache.hadoop.hbase import HBaseConfiguration
 # from org.apache.hadoop.hbase.client import Put, ConnectionFactory
 # from org.apache.hadoop.hbase.util import Bytes
@@ -18,22 +20,103 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def write_to_bigtable(row, table):
-    """
-    Function to write a single row to Bigtable.
-    :param row: A Spark Row object
-    :param table: HBase Table object
-    """
-    # row_key = row["id"]  # Use a unique field as the row key
-    # put = Put(Bytes.toBytes(row_key))
-    #
-    # # Add each column from the row into Bigtable
-    # for column, value in row.asDict().items():
-    #     if column != "id":  # Skip the row key column
-    #         put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes(
-    #             column), Bytes.toBytes(str(value)))
-    #
-    # table.put(put)
+def sanitize(df):
+    renamed_columns = [col.replace(" ", "_").lower() for col in df.columns]
+    df = df.toDF(*renamed_columns)
+
+    project_columns = ["id", "sectype", "last", "trading_time", "trading_date"]
+
+    df = df.select(
+        project_columns
+    ).filter(
+        F.col("last").isNotNull() &
+        F.col("trading_time").isNotNull() &
+        F.col("trading_date").isNotNull()
+    ).withColumn(
+        "last",
+        F.col("last").cast("float")
+    ).withColumn(
+        "trading_date",
+        F.to_date(F.col("trading_date"), "dd-MM-yyyy")
+    )
+
+    return df
+
+
+# Keep the symbol's last price within the 5-min windows
+def retainWindowLastPrice(df):
+    df = df.withColumn(
+        "timestamp",
+        F.concat_ws(
+            " ",
+            F.col("trading_date"),
+            F.col("trading_time")
+        ).cast("timestamp")
+    ).drop(
+        "trading_date", "trading_time"
+    ).withColumn(
+        "5min_window",
+        (F.unix_timestamp("timestamp") / 300).cast("integer") * 300
+    )
+
+    # Add a row number column to identify the last record in each window
+    window_spec = Window.partitionBy("id", "sectype", "5min_window") \
+        .orderBy(F.col("timestamp").desc())
+
+    df = df.withColumn(
+        "row_num",
+        F.row_number().over(window_spec)
+    ).filter(
+        F.col("row_num") == 1
+    ).drop(
+        "row_num"
+    ).orderBy(
+        "id", "sectype", "timestamp"
+    )
+
+    return df
+
+
+def calculateEmaUdf(prices):
+    j = 38
+    alpha = 2 / (1 + j)
+
+    ema = 0
+    ema_values = []
+
+    for price in prices:
+        ema = price * alpha + ema * (1 - alpha)
+        ema_values.append(ema)
+
+    return ema_values
+
+
+def calculateEma(df):
+    ema_udf = F.udf(calculateEmaUdf, ArrayType(DoubleType()))
+
+    df = df.groupBy("id", "sectype").agg(
+        F.collect_list("last").alias("prices"),
+        F.collect_list("timestamp").alias("timestamps")
+    ).withColumn(
+        "ema_values",
+        ema_udf(F.col("prices"))
+    ).withColumn(
+        "zipped",
+        F.arrays_zip(F.col("prices"), F.col(
+            "ema_values"), F.col("timestamps"))
+    ).select(
+        F.col("id"),
+        F.col("sectype"),
+        F.explode(F.col("zipped")).alias("exploded")
+    ).select(
+        F.col("id"),
+        F.col("sectype"),
+        F.col("exploded.prices").alias("last"),
+        F.col("exploded.ema_values").alias("ema"),
+        F.col("exploded.timestamps").alias("timestamp")
+    )
+
+    return df
 
 
 def main():
@@ -42,37 +125,20 @@ def main():
     spark = SparkSession.builder \
         .appName("ReadGCS") \
         .getOrCreate()
-    # .config("spark.jars", "./libs/bigtable-hbase-2.x-hadoop-2.14.7.jar") \
-    # hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
-    # for conf_key in hadoop_conf.iterator():
-    #     print(conf_key.getKey(), conf_key.getValue())
-
-    # # Configure Bigtable
-    # conf = HBaseConfiguration.create()
-    # conf.set("google.bigtable.project.id", "trading-term")
-    # conf.set("google.bigtable.instance.id", "dev-bigtable-instance")
-    # # conf.set("google.bigtable.auth.service.account.json.keyfile",
-    # #          "/path/to/keyfile.json")
-    #
-    # # Create an HBase connection
-    # connection = ConnectionFactory.createConnection(conf)
-    # table = connection.getTable(Bytes.toBytes("trading-data-table"))
-    # Path to your GCS file
-    gcs_path = "gs://cs-e4780/debs2022-gc-trading-day-08-11-21.csv"
 
     # Load CSV data
-    # csv_file = "./data/debs2022-gc-trading-day-08-11-21.csv"
+    # gcs_path = "gs://cs-e4780/debs2022-gc-trading-day-08-11-21.csv"
+    gcs_path = "/Users/longv/Study/aalto/scalable-systems/debs2022-gc-trading-day-08-11-21.csv"
     df = spark.read.option("header", "true") \
         .option("comment", "#") \
         .csv(gcs_path)
 
-    df.show(5)
-    # Write each row to Bigtable
-    # df.foreach(lambda row: write_to_bigtable(row, table))
+    # Perform EMA calculation
+    df = sanitize(df)
+    df = retainWindowLastPrice(df)
+    df = calculateEma(df)
 
-    # Close the connection
-    # table.close()
-    # connection.close()
+    df.show()
 
     # Stop SparkSession
     spark.stop()

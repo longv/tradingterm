@@ -8,6 +8,6 @@ configMapGenerator:
 secretGenerator:
   - name: gcs-key
     files:
-      - ./secrets/gcs-key.json  # GCS service account key
+      - ./secrets/gcs-key.json
     options:
-      disableNameSuffixHash: true  # Keep the Secret name static
+      disableNameSuffixHash: true

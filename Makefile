@@ -9,6 +9,10 @@ apply:
 	helm install spark-operator spark-operator/spark-operator --namespace spark-operator --create-namespace --wait
 	kubectl apply -k $(APP_SPARK)
 
+update:
+	@echo "Re-applying all resources to the cluster..."
+	kubectl apply -k $(APP_SPARK)
+
 delete:
 	@echo "Deleting k8s cluster..."
 	kind delete cluster --name $(CLUSTER_NAME)
@@ -20,6 +24,5 @@ verify:
 verify/operator:
 	@echo "Verifying deployments in spark operator namespace..."
 	kubectl get pods -n spark-operator
-
 
 .PHONY: apply delete verify verify/operator
