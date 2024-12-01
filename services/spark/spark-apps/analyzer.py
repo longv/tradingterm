@@ -6,9 +6,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import ArrayType, DoubleType
 from pyspark.sql.window import Window
-# from org.apache.hadoop.hbase import HBaseConfiguration
-# from org.apache.hadoop.hbase.client import Put, ConnectionFactory
-# from org.apache.hadoop.hbase.util import Bytes
+from pymongo import MongoClient
 
 
 # Configure logging
@@ -122,6 +120,23 @@ def calculateEma(df):
     return df
 
 
+def saveToDB(df):
+    uri = "mongodb://localhost:27017/"
+    client = MongoClient(uri)
+
+    db = client["tradingterm_db"]
+    collection = db["ema_data"]
+
+    pdf = df.toPandas()
+    data_to_insert = pdf.to_dict(orient="records")
+
+    collection.insert_many(data_to_insert)
+
+    client.close()
+
+    return
+
+
 def main():
 
     # Initialize SparkSession
@@ -130,7 +145,7 @@ def main():
         .getOrCreate()
 
     # Load CSV data
-    # gcs_path = "gs://cs-e4780/debs2022-gc-trading-day-08-11-21.csv"
+    gcs_path = "gs://cs-e4780/debs2022-gc-trading-day-08-11-21.csv"
     gcs_path = "/Users/longv/Study/aalto/scalable-systems/debs2022-gc-trading-day-08-11-21.csv"
     df = spark.read.option("header", "true") \
         .option("comment", "#") \
@@ -143,20 +158,22 @@ def main():
 
     df.show()
 
-    pdf = df.toPandas()
+    # pdf = df.toPandas()
+    #
+    # # Convert the timestamp column to a datetime object for better handling
+    # pdf['timestamp'] = pd.to_datetime(pdf['timestamp'])
+    #
+    # # Plot EMA over Time
+    # plt.figure(figsize=(12, 6))
+    # sns.lineplot(data=pdf, x="timestamp", y="ema", hue="id")
+    # plt.title("EMA Over Time")
+    # plt.xlabel("Timestamp")
+    # plt.ylabel("EMA")
+    # plt.xticks(rotation=45)
+    # plt.tight_layout()
+    # plt.show()
 
-    # Convert the timestamp column to a datetime object for better handling
-    pdf['timestamp'] = pd.to_datetime(pdf['timestamp'])
-
-    # Plot EMA over Time
-    plt.figure(figsize=(12, 6))
-    sns.lineplot(data=pdf, x="timestamp", y="ema", hue="id")
-    plt.title("EMA Over Time")
-    plt.xlabel("Timestamp")
-    plt.ylabel("EMA")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
+    saveToDB(df)
 
     # Stop SparkSession
     spark.stop()
