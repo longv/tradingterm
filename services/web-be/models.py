@@ -2,12 +2,30 @@ import uuid
 from datetime import datetime
 from bson import ObjectId
 from typing import Optional
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, ConfigDict, root_validator
 
 
 class TradeEvent(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "_id": {
+                    "$oid": "674c1d48a13debafe2e364c9"
+                },
+                "symbol": "2CRSI.FR",
+                "sectype": "E",
+                "last": 5.119999885559082,
+                "ema": 1.9310302225654525,
+                "timestamp": {
+                    "$date": "2021-11-08T09:44:05.771Z"
+                }
+            }
+        }
+    )
+
     id: str = Field(alias="_id")
-    symbol: str = Field(alias="id")
+    symbol: str = Field(validation_alias="id", serialization_alias="symbol")
     sectype: str = Field(...)
     last: float = Field(...)
     ema: float = Field(...)
@@ -19,24 +37,6 @@ class TradeEvent(BaseModel):
         if "_id" in values and isinstance(values["_id"], ObjectId):
             values["_id"] = str(values["_id"])
         return values
-
-    class Config:
-        populate_by_name = True
-        json_encoders = {ObjectId: str}
-        json_schema_extra = {
-            "example": {
-                "_id": {
-                    "$oid": "674c1d48a13debafe2e364c9"
-                },
-                "id": "2CRSI.FR",
-                "sectype": "E",
-                "last": 5.119999885559082,
-                "ema": 1.9310302225654525,
-                "timestamp": {
-                    "$date": "2021-11-08T09:44:05.771Z"
-                }
-            }
-        }
 
 
 class Book(BaseModel):
