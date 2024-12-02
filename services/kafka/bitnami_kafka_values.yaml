@@ -1,0 +1,9 @@
+service:
+  nodePorts:
+    external: 9092
+
+provisioning:  
+  topics:
+      - name: trade-event-topic
+        partitions: 1
+        replicationFactor: 1

@@ -3,6 +3,10 @@ apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
     extraPortMappings:
-      - containerPort: 30000  # NodePort for Spark Master UI
-        hostPort: 3000
+      - containerPort: 9092  # Kafka NodePort
+        hostPort: 9092
+        protocol: TCP
+      - containerPort: 2181  # Zookeeper NodePort
+        hostPort: 2181
+        protocol: TCP
   - role: worker
